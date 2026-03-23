@@ -1,6 +1,7 @@
-langchain          
-langchain-openai     
+langchain
+langchain-openai
 langgraph
-openai           
-python-dotenv       
-typing-extensions      
+openai
+python-dotenv
+typing-extensions
+pytest
