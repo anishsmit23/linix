@@ -1,6 +1,8 @@
+
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyd
 
 
 .venv/
@@ -16,12 +18,28 @@ ENV/
 
 build/
 dist/
+site/
 *.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.tox/
+.nox/
+
+
 .coverage
+.coverage.*
 htmlcov/
+
+
+.ipynb_checkpoints/
 
 
 .vscode/
@@ -32,7 +50,6 @@ htmlcov/
 
 .DS_Store
 Thumbs.db
-
 
 logs/
 *.log
