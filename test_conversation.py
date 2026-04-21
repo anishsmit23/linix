@@ -7,22 +7,26 @@ def test_full_conversation():
     state = {
         "messages": [],
         "current_intent": None,
+        "sales_stage": None,
         "lead_name": None,
         "lead_email": None,
         "lead_platform": None,
+        "lead_plan": None,
+        "objection_count": 0,
         "lead_captured": False,
         "next_step": ""
     }
     
     test_messages = [
         "Hi, tell me about your pricing",
-        "That sounds good, I want to try the Pro plan for my YouTube channel",
+        "This sounds expensive, why should I buy Pro?",
+        "Okay, I want to start with Pro for my YouTube channel",
         "John Doe",
         "john@example.com"
     ]
     
     print("=" * 60)
-    print("AutoStream Agent - Test Conversation")
+    print("Inflx Agent - Test Conversation")
     print("=" * 60)
     print()
     
