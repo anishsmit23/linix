@@ -8,6 +8,7 @@ def test_full_conversation():
         "messages": [],
         "current_intent": None,
         "sales_stage": None,
+        "qualification_in_progress": False,
         "lead_name": None,
         "lead_email": None,
         "lead_platform": None,
@@ -26,7 +27,7 @@ def test_full_conversation():
     ]
     
     print("=" * 60)
-    print("Inflx Agent - Test Conversation")
+    print("Infix Agent - Test Conversation")
     print("=" * 60)
     print()
     

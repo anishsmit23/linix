@@ -2,7 +2,7 @@
 
 echo ""
 echo "=========================================="
-echo "Inflx Agent - Installation Script"
+echo "Infix Agent - Installation Script"
 echo "=========================================="
 echo ""
 

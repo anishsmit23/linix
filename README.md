@@ -1,6 +1,6 @@
-# Inflx Conversational Agent
+# Infix Conversational Agent
 
-Inflx is a lightweight conversational sales agent that:
+Infix is a lightweight conversational sales agent that sells AutoStream and can:
 
 - Classifies user intent (greeting, product/pricing, high-intent lead)
 - Handles objections and gives value-based recommendations

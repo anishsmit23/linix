@@ -6,10 +6,14 @@ import operator
 import re
 from pathlib import Path
 
+AGENT_NAME = "Infix"
+PRODUCT_NAME = "AutoStream"
+
 class AgentState(TypedDict):
     messages: Annotated[list, operator.add]
     current_intent: Optional[str]
     sales_stage: Optional[str]
+    qualification_in_progress: bool
     lead_name: Optional[str]
     lead_email: Optional[str]
     lead_platform: Optional[str]
@@ -125,18 +129,27 @@ def extract_info_from_message(message: str, state: AgentState) -> AgentState:
         explicit_name_patterns = [
             r"\bmy name is\s+([A-Za-z][A-Za-z\s'-]{1,40})$",
             r"\bi am\s+([A-Za-z][A-Za-z\s'-]{1,40})$",
-            r"\bthis is\s+([A-Za-z][A-Za-z\s'-]{1,40})$",
         ]
+        disallowed_name_tokens = {
+            "interested", "buy", "buying", "price", "pricing", "overpriced", "expensive",
+            "cost", "costly", "plan", "basic", "pro", "enterprise", "youtube", "instagram",
+            "tiktok", "twitch", "help", "support", "refund", "policy", "feature", "features"
+        }
         for pattern in explicit_name_patterns:
             match = re.search(pattern, message_lower)
             if match:
                 parsed_name = match.group(1).strip(" .,!?")
-                state["lead_name"] = " ".join(part.capitalize() for part in parsed_name.split())
-                break
+                name_parts = [p for p in parsed_name.split() if p]
+                if 1 <= len(name_parts) <= 3 and not any(p in disallowed_name_tokens for p in name_parts):
+                    state["lead_name"] = " ".join(part.capitalize() for part in name_parts)
+                    break
 
     if not state.get("lead_name") and "@" not in message:
         words = message.split()
-        stop_words = ["hi", "hello", "yes", "no", "ok", "sure", "i", "my", "is", "the"]
+        stop_words = [
+            "hi", "hello", "yes", "no", "ok", "sure", "i", "my", "is", "the", "this", "bit",
+            "over", "priced", "price", "pricing", "buy", "buying", "plan", "why", "what", "which"
+        ]
         if 1 <= len(words) <= 4 and not any(word.lower() in stop_words for word in words):
             state["lead_name"] = message.strip()
     
@@ -161,12 +174,9 @@ def classify_intent(state: AgentState) -> dict:
     mentions_plan = bool(re.search(r"\b(plan|basic|pro|enterprise)\b", text))
     has_product_query = has_pricing_concern or bool(re.search(r"\b(refund|support|policy|features?|details|difference|compare)\b", text))
 
-    # Keep collecting lead details once qualification starts, until capture completes.
-    if not state.get("lead_captured"):
-        if state.get("current_intent") == "high_intent_lead" or any(
-            [state.get("lead_name"), state.get("lead_email"), state.get("lead_platform")]
-        ):
-            return {"current_intent": "high_intent_lead", "next_step": "qualify_lead"}
+    # Keep collecting lead details only when qualification was explicitly started.
+    if state.get("qualification_in_progress") and not state.get("lead_captured"):
+        return {"current_intent": "high_intent_lead", "next_step": "qualify_lead"}
 
     if has_greeting and not has_product_query and not has_buy_signal:
         return {"current_intent": "greeting", "next_step": "respond_greeting"}
@@ -178,16 +188,24 @@ def classify_intent(state: AgentState) -> dict:
         return {"current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
 
     if has_buy_signal and not has_doubt_signal:
-        return {"current_intent": "high_intent_lead", "next_step": "qualify_lead"}
+        return {
+            "current_intent": "high_intent_lead",
+            "next_step": "qualify_lead",
+            "qualification_in_progress": True,
+        }
 
     if mentions_plan and not has_doubt_signal and "?" not in text:
-        return {"current_intent": "high_intent_lead", "next_step": "qualify_lead"}
+        return {
+            "current_intent": "high_intent_lead",
+            "next_step": "qualify_lead",
+            "qualification_in_progress": True,
+        }
 
     return {"current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
 
 def respond_greeting(state: AgentState) -> AgentState:
     response = (
-        "Hello! I can help you pick the right Inflx plan and get started quickly. "
+        f"Hello! I am {AGENT_NAME}, and I can help you pick the right {PRODUCT_NAME} plan and get started quickly. "
         "Are you creating for YouTube, Instagram, TikTok, or Twitch?"
     )
     state["messages"].append(AIMessage(content=response))
@@ -323,13 +341,14 @@ def execute_tool(state: AgentState) -> AgentState:
     if name and email and platform:
         mock_lead_capture(name=name, email=email, platform=platform)
         state["lead_captured"] = True
+        state["qualification_in_progress"] = False
         if state.get("lead_plan"):
             response = (
                 f"Perfect! I've captured your details for the {state['lead_plan']} plan. "
-                f"Our team will reach out to {email} shortly to get you started with Inflx."
+                f"Our team will reach out to {email} shortly to get you started with {PRODUCT_NAME}."
             )
         else:
-            response = f"Perfect! I've captured your details. Our team will reach out to {email} shortly to get you started with Inflx."
+            response = f"Perfect! I've captured your details. Our team will reach out to {email} shortly to get you started with {PRODUCT_NAME}."
         state["messages"].append(AIMessage(content=response))
         state["sales_stage"] = "won"
     
@@ -382,6 +401,7 @@ def run_agent():
         "messages": [],
         "current_intent": None,
         "sales_stage": None,
+        "qualification_in_progress": False,
         "lead_name": None,
         "lead_email": None,
         "lead_platform": None,
@@ -391,7 +411,7 @@ def run_agent():
         "next_step": ""
     }
     
-    print("Inflx Agent (type 'quit' to exit)\n")
+    print(f"{AGENT_NAME} Agent (type 'quit' to exit)\n")
     
     while True:
         user_input = input("You: ").strip()
