@@ -2,7 +2,7 @@
 
 echo ""
 echo "=========================================="
-echo "AutoStream Agent - Installation Script"
+echo "Inflx Agent - Installation Script"
 echo "=========================================="
 echo ""
 
