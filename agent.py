@@ -1,13 +1,20 @@
 from typing import TypedDict, Optional, Annotated
 from langgraph.graph import StateGraph, END
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import json
+import os
 import operator
 import re
 from pathlib import Path
+from dotenv import load_dotenv
 
 AGENT_NAME = "Infix"
 PRODUCT_NAME = "AutoStream"
+
+load_dotenv()
+
+_LLM: Optional[ChatOpenAI] = None
 
 class AgentState(TypedDict):
     messages: Annotated[list, operator.add]
@@ -69,6 +76,39 @@ def load_json_file(filepath: Path, fallback: dict) -> dict:
 KNOWLEDGE_BASE = load_json_file(DATA_DIR / "knowledge_base.json", DEFAULT_KNOWLEDGE_BASE)
 OBJECTION_LIBRARY = load_json_file(DATA_DIR / "objection_library.json", DEFAULT_OBJECTION_LIBRARY)
 
+
+def get_llm() -> Optional[ChatOpenAI]:
+    global _LLM
+    if _LLM is not None:
+        return _LLM
+    if not os.getenv("OPENAI_API_KEY"):
+        return None
+    try:
+        _LLM = ChatOpenAI(
+            model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            temperature=0.2,
+            timeout=8,
+        )
+    except Exception:
+        _LLM = None
+    return _LLM
+
+
+def parse_json_object(text: str) -> Optional[dict]:
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r"\{[\s\S]*\}", text)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None
+
 def mock_lead_capture(name: str, email: str, platform: str):
     print(f"Lead captured successfully: {name}, {email}, {platform}")
 
@@ -95,18 +135,63 @@ def pricing_snapshot(pricing: dict) -> str:
         f"Pro Plan: {pricing['pro']['price']} - "
         f"{pricing['pro']['videos_limit']}, {pricing['pro']['resolution']}, {pro_features}"
     )
-    return f"{basic_line}\n{pro_line}"
+    lines = [basic_line, pro_line]
+    if "enterprise" in pricing:
+        enterprise_features = ", ".join(pricing["enterprise"].get("features", []))
+        enterprise_line = (
+            f"Enterprise Plan: {pricing['enterprise']['price']} - "
+            f"{pricing['enterprise']['videos_limit']}, {pricing['enterprise']['resolution']}"
+        )
+        if enterprise_features:
+            enterprise_line += f", {enterprise_features}"
+        lines.append(enterprise_line)
+    return "\n".join(lines)
 
-def extract_info_from_message(message: str, state: AgentState) -> AgentState:
+
+def extract_name_with_llm(message: str) -> Optional[str]:
+    llm = get_llm()
+    if not llm:
+        return None
+
+    system = (
+        "Extract only a human first/last name from the user message. "
+        "If no clear person name is provided, return null. "
+        "Respond with strict JSON: {\"name\": string|null}."
+    )
+    try:
+        reply = llm.invoke(
+            [
+                SystemMessage(content=system),
+                HumanMessage(content=f"Message: {message}"),
+            ]
+        )
+        parsed = parse_json_object(reply.content)
+        if not parsed or not parsed.get("name"):
+            return None
+        name = str(parsed["name"]).strip()
+        if not re.fullmatch(r"[A-Za-z][A-Za-z\s'-]{0,48}", name):
+            return None
+        return " ".join(part.capitalize() for part in name.split())
+    except Exception:
+        return None
+
+
+def extract_info_from_message(
+    message: str,
+    state: AgentState,
+    allow_loose_name: bool = False,
+    allow_llm_name: bool = False,
+) -> dict:
+    updates: dict = {}
     message_lower = message.lower()
 
     if not state.get("lead_plan"):
         if "basic" in message_lower:
-            state["lead_plan"] = "Basic"
+            updates["lead_plan"] = "Basic"
         elif "pro" in message_lower:
-            state["lead_plan"] = "Pro"
+            updates["lead_plan"] = "Pro"
         elif "enterprise" in message_lower:
-            state["lead_plan"] = "Enterprise"
+            updates["lead_plan"] = "Enterprise"
     
     if not state.get("lead_platform"):
         platforms = {
@@ -117,16 +202,17 @@ def extract_info_from_message(message: str, state: AgentState) -> AgentState:
         }
         for key, value in platforms.items():
             if key in message_lower:
-                state["lead_platform"] = value
+                updates["lead_platform"] = value
                 break
     
     email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
     emails = re.findall(email_pattern, message)
     if emails and not state.get("lead_email"):
-        state["lead_email"] = emails[0]
+        updates["lead_email"] = emails[0]
     
-    if not state.get("lead_name"):
+    if not state.get("lead_name") and "lead_name" not in updates:
         explicit_name_patterns = [
+            r"\bmyself\s+([A-Za-z][A-Za-z'-]{1,30})(?:\b|$)",
             r"\bmy name is\s+([A-Za-z][A-Za-z\s'-]{1,40})$",
             r"\bi am\s+([A-Za-z][A-Za-z\s'-]{1,40})$",
         ]
@@ -141,23 +227,33 @@ def extract_info_from_message(message: str, state: AgentState) -> AgentState:
                 parsed_name = match.group(1).strip(" .,!?")
                 name_parts = [p for p in parsed_name.split() if p]
                 if 1 <= len(name_parts) <= 3 and not any(p in disallowed_name_tokens for p in name_parts):
-                    state["lead_name"] = " ".join(part.capitalize() for part in name_parts)
+                    updates["lead_name"] = " ".join(part.capitalize() for part in name_parts)
                     break
 
-    if not state.get("lead_name") and "@" not in message:
+    if allow_loose_name and not state.get("lead_name") and "lead_name" not in updates and "@" not in message:
         words = message.split()
         stop_words = [
             "hi", "hello", "yes", "no", "ok", "sure", "i", "my", "is", "the", "this", "bit",
             "over", "priced", "price", "pricing", "buy", "buying", "plan", "why", "what", "which"
         ]
         if 1 <= len(words) <= 4 and not any(word.lower() in stop_words for word in words):
-            state["lead_name"] = message.strip()
-    
-    return state
+            updates["lead_name"] = message.strip()
+
+    if allow_llm_name and not state.get("lead_name") and "lead_name" not in updates:
+        llm_name = extract_name_with_llm(message)
+        if llm_name:
+            updates["lead_name"] = llm_name
+
+    return updates
 
 def classify_intent(state: AgentState) -> dict:
     text = state["messages"][-1].content.lower()
-    state = extract_info_from_message(state["messages"][-1].content, state)
+    extracted_updates = extract_info_from_message(
+        state["messages"][-1].content,
+        state,
+        allow_loose_name=False,
+        allow_llm_name=False,
+    )
 
     has_greeting = bool(re.search(r"\b(hi|hello|hey)\b", text))
 
@@ -176,19 +272,20 @@ def classify_intent(state: AgentState) -> dict:
 
     # Keep collecting lead details only when qualification was explicitly started.
     if state.get("qualification_in_progress") and not state.get("lead_captured"):
-        return {"current_intent": "high_intent_lead", "next_step": "qualify_lead"}
+        return {**extracted_updates, "current_intent": "high_intent_lead", "next_step": "qualify_lead"}
 
     if has_greeting and not has_product_query and not has_buy_signal:
-        return {"current_intent": "greeting", "next_step": "respond_greeting"}
+        return {**extracted_updates, "current_intent": "greeting", "next_step": "respond_greeting"}
 
     if has_pricing_concern:
-        return {"current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
+        return {**extracted_updates, "current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
 
     if re.search(r"\b(refund|support|policy|features?)\b", text):
-        return {"current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
+        return {**extracted_updates, "current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
 
     if has_buy_signal and not has_doubt_signal:
         return {
+            **extracted_updates,
             "current_intent": "high_intent_lead",
             "next_step": "qualify_lead",
             "qualification_in_progress": True,
@@ -196,18 +293,35 @@ def classify_intent(state: AgentState) -> dict:
 
     if mentions_plan and not has_doubt_signal and "?" not in text:
         return {
+            **extracted_updates,
             "current_intent": "high_intent_lead",
             "next_step": "qualify_lead",
             "qualification_in_progress": True,
         }
 
-    return {"current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
+    return {**extracted_updates, "current_intent": "product_or_pricing", "next_step": "retrieve_knowledge"}
 
 def respond_greeting(state: AgentState) -> AgentState:
-    response = (
-        f"Hello! I am {AGENT_NAME}, and I can help you pick the right {PRODUCT_NAME} plan and get started quickly. "
-        "Are you creating for YouTube, Instagram, TikTok, or Twitch?"
-    )
+    lead_name = state.get("lead_name")
+    lead_platform = state.get("lead_platform")
+
+    if lead_name and lead_platform:
+        response = (
+            f"Great to meet you {lead_name}! Awesome that you create on {lead_platform}. "
+            f"I am {AGENT_NAME}, and I can help you choose the right {PRODUCT_NAME} plan for your workflow. "
+            "Do you want a quick recommendation based on your monthly posting volume?"
+        )
+    elif lead_platform:
+        response = (
+            f"Great, thanks for sharing that you create on {lead_platform}. "
+            f"I am {AGENT_NAME}, and I can help you choose the right {PRODUCT_NAME} plan. "
+            "Do you want a quick recommendation based on your monthly posting volume?"
+        )
+    else:
+        response = (
+            f"Hello! I am {AGENT_NAME}, and I can help you pick the right {PRODUCT_NAME} plan and get started quickly. "
+            "Are you creating for YouTube, Instagram, TikTok, or Twitch?"
+        )
     state["messages"].append(AIMessage(content=response))
     state["sales_stage"] = "discovery"
     state["next_step"] = "end"
@@ -234,10 +348,17 @@ def retrieve_knowledge(state: AgentState) -> AgentState:
         )
         state["sales_stage"] = "value_pitch"
     elif "compare" in text or "difference" in text:
+        enterprise_line = ""
+        if "enterprise" in pricing:
+            enterprise_line = (
+                f"\n- Enterprise: {pricing['enterprise']['price']}, "
+                f"{pricing['enterprise']['videos_limit']}, {pricing['enterprise']['resolution']}"
+            )
         response = (
             "Here is the fastest comparison:\n"
             f"- Basic: {pricing['basic']['price']}, {pricing['basic']['videos_limit']}, {pricing['basic']['resolution']}\n"
             f"- Pro: {pricing['pro']['price']}, {pricing['pro']['videos_limit']}, {pricing['pro']['resolution']}\n"
+            f"{enterprise_line}"
             "If you publish frequently or need 4K + AI captions, Pro is usually the better fit."
         )
         state["sales_stage"] = "recommendation"
@@ -280,10 +401,46 @@ def retrieve_knowledge(state: AgentState) -> AgentState:
         )
         state["sales_stage"] = "objection_handling"
     else:
-        response = (
-            f"{pricing_snapshot(pricing)}\n"
-            "Would you prefer Basic (budget-friendly) or Pro (unlimited + 4K + AI captions)?"
-        )
+        llm = get_llm()
+        if llm:
+            rag_context = {
+                "product": KNOWLEDGE_BASE.get("product", {}),
+                "pricing": KNOWLEDGE_BASE.get("pricing", {}),
+                "policies": KNOWLEDGE_BASE.get("policies", {}),
+                "objection_hint": objection_response,
+                "recommended_plan": recommended_plan,
+                "recommendation_reason": recommendation_reason,
+                "sales_stage": state.get("sales_stage"),
+            }
+            try:
+                llm_response = llm.invoke(
+                    [
+                        SystemMessage(
+                            content=(
+                                f"You are {AGENT_NAME}, a sales assistant for {PRODUCT_NAME}. "
+                                "Answer using only the provided knowledge context. "
+                                "Be concise, persuasive, and truthful. End with one short CTA question."
+                            )
+                        ),
+                        HumanMessage(
+                            content=(
+                                f"User message: {state['messages'][-1].content}\n"
+                                f"Knowledge context: {json.dumps(rag_context)}"
+                            )
+                        ),
+                    ]
+                )
+                response = llm_response.content.strip()
+            except Exception:
+                response = (
+                    f"{pricing_snapshot(pricing)}\n"
+                    "Would you prefer Basic (budget-friendly) or Pro (unlimited + 4K + AI captions)?"
+                )
+        else:
+            response = (
+                f"{pricing_snapshot(pricing)}\n"
+                "Would you prefer Basic (budget-friendly) or Pro (unlimited + 4K + AI captions)?"
+            )
         state["sales_stage"] = "consideration"
 
     state["messages"].append(AIMessage(content=response))
@@ -293,7 +450,13 @@ def retrieve_knowledge(state: AgentState) -> AgentState:
 
 def qualify_lead(state: AgentState) -> AgentState:
     last_message = state["messages"][-1].content
-    state = extract_info_from_message(last_message, state)
+    extracted_updates = extract_info_from_message(
+        last_message,
+        state,
+        allow_loose_name=True,
+        allow_llm_name=True,
+    )
+    state.update(extracted_updates)
     
     has_name = bool(state.get("lead_name"))
     has_email = bool(state.get("lead_email"))

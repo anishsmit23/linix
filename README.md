@@ -4,9 +4,15 @@ Infix is a lightweight conversational sales agent that sells AutoStream and can:
 
 - Classifies user intent (greeting, product/pricing, high-intent lead)
 - Handles objections and gives value-based recommendations
-- Answers product questions from local JSON data (RAG-style lookup)
+- Answers product questions using an LLM with local JSON data (RAG-style grounding)
 - Captures lead details (name, email, platform, plan) before tool execution
 - Uses a mock lead-capture tool once qualification is complete
+
+Naming note:
+
+- Agent identity: Infix
+- Product being sold: AutoStream
+- Repository name: linix (legacy project folder name)
 
 ## Project Structure
 
