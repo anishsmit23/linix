@@ -1,0 +1,40 @@
+{
+  "intent_classification_examples": [
+    {
+      "user": "Hi there",
+      "intent": "greeting"
+    },
+    {
+      "user": "How much does your product cost?",
+      "intent": "product_or_pricing"
+    },
+    {
+      "user": "I want to sign up for Pro",
+      "intent": "high_intent_lead"
+    }
+  ],
+  "rag_response_examples": [
+    {
+      "user": "What is the Pro price?",
+      "response": "Pro is $79/month with unlimited videos and 4K exports."
+    }
+  ],
+  "lead_qualification_examples": [
+    {
+      "user": "I want to start",
+      "agent": "Great! To get you started, what's your name?"
+    }
+  ],
+  "complete_conversations": [
+    {
+      "turns": [
+        "User: I want Pro for YouTube",
+        "Agent: Great! To get you started, what's your name?",
+        "User: John Doe",
+        "Agent: Thanks John Doe! What's your email address?",
+        "User: john@example.com",
+        "Agent: Perfect! I've captured your details."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "objections": [
+    {
+      "type": "price_concern",
+      "keywords": [
+        "expensive",
+        "too high",
+        "costly",
+        "price"
+      ],
+      "response": "I understand pricing matters. Basic starts at $29/month for new creators, while Pro at $79/month is built for teams that need unlimited videos, 4K exports, and faster turnaround."
+    },
+    {
+      "type": "feature_fit",
+      "keywords": [
+        "what features",
+        "what do i get",
+        "included"
+      ],
+      "response": "Basic includes core editing automation, while Pro adds AI captions, priority rendering, and 24/7 chat support."
+    },
+    {
+      "type": "support_concern",
+      "keywords": [
+        "support",
+        "help",
+        "response time"
+      ],
+      "response": "We offer email support on Basic, and 24/7 chat support on Pro and Enterprise."
+    }
+  ]
+}

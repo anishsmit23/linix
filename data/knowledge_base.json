@@ -1,0 +1,43 @@
+{
+  "product": {
+    "name": "Inflx",
+    "summary": "AI video editing assistant for creators.",
+    "core_value": "Automate repetitive editing work and publish faster."
+  },
+  "pricing": {
+    "basic": {
+      "price": "$29/month",
+      "videos_limit": "10 videos/month",
+      "resolution": "720p",
+      "features": [
+        "Auto-cut clips",
+        "Template exports",
+        "Email support"
+      ]
+    },
+    "pro": {
+      "price": "$79/month",
+      "videos_limit": "Unlimited videos",
+      "resolution": "4K",
+      "features": [
+        "AI captions",
+        "Priority rendering",
+        "24/7 chat support"
+      ]
+    },
+    "enterprise": {
+      "price": "Custom",
+      "videos_limit": "Unlimited",
+      "resolution": "4K+",
+      "features": [
+        "Dedicated success manager",
+        "SLA-backed support",
+        "Custom workflows"
+      ]
+    }
+  },
+  "policies": {
+    "refund": "No refunds after 7 days.",
+    "support": "24/7 support is included in Pro and Enterprise plans."
+  }
+}
