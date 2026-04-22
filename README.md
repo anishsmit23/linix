@@ -20,8 +20,8 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2.28-1C3A5E?style=flat-square)](https://langchain-ai.github.io/langgraph/)
-[![LangChain](https://img.shields.io/badge/LangChain-0.2.16-2E8B57?style=flat-square)](https://langchain.com)
-[![OpenAI](https://img.shields.io/badge/GPT--4o--mini-Powered-412991?style=flat-square&logo=openai&logoColor=white)](https://openai.com)
+[![LangChain](https://img.shields.io/badge/LangChain-0.3-2E8B57?style=flat-square)](https://langchain.com)
+[![Gemini](https://img.shields.io/badge/Gemini--1.5--Flash-Powered-4285F4?style=flat-square&logo=google&logoColor=white)](https://ai.google.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=flat-square)](LICENSE)
 
 <br/>
@@ -54,36 +54,34 @@
 Below is a real conversation captured from the running agent:
 
 ```
-You:    hello
-Infix:  Hello! I am Infix, and I can help you pick the right AutoStream plan
-        and get started quickly. Are you creating for YouTube, Instagram, TikTok, or Twitch?
+You:    Hi, tell me about your pricing
+Infix:  Hello! AutoStream has two main plans:
+        • Basic — $29/month for 10 videos at 720p
+        • Pro — $79/month for unlimited videos, 4K resolution, and AI captions
+        Would you like to know which plan fits your workflow best?
 
-You:    can you explain me your plans
-Infix:  Basic Plan:      $29/month  — 10 videos/month, 720p
-        Pro Plan:        $79/month  — Unlimited videos, 4K, AI captions, Priority rendering, 24/7 chat support
-        Enterprise Plan: Custom     — Unlimited, 4K+, Dedicated success manager, SLA-backed support
-        Would you prefer Basic (budget-friendly) or Pro (unlimited + 4K + AI captions)?
+You:    This sounds expensive, why should I buy Pro?
+Infix:  I understand pricing matters! Pro at $79/month pays for itself quickly —
+        unlimited videos means no per-video cost, you get 4K exports for
+        professional quality, plus AI captions save hours of manual work.
+        Would you like to try Pro and see the difference?
 
-You:    why is everything very expensive
-Infix:  I understand pricing matters. Basic starts at $29/month for new creators,
-        while Pro at $79/month is built for teams that need unlimited videos,
-        4K exports, and faster turnaround. Tell me your monthly volume and
-        platform and I can suggest the best-value plan for you.
-
-You:    i want to subscribe pro version
+You:    Okay, I want to start with Pro for my YouTube channel
 Infix:  Great choice with the Pro plan. To get you started, what's your name?
 
-You:    Anish
-Infix:  Thanks Anish! What's your email address?
+You:    John Doe
+Infix:  Thanks John Doe! What's your email address?
 
-You:    anish@gmail.com
-Infix:  Perfect! Which platform do you create content for? (YouTube, Instagram, TikTok, or Twitch)
+You:    john@example.com
+Infix:  Perfect! Which platform do you create content for?
+        (YouTube, Instagram, TikTok, or Twitch)
 
-You:    youtube
-        >> Lead captured successfully: Anish, anish@gmail.com, YouTube
+You:    YouTube
+        >> Lead captured successfully: John Doe, john@example.com, YouTube
 
 Infix:  Perfect! I've captured your details for the Pro plan.
-        Our team will reach out to anish@gmail.com shortly to get you started with AutoStream.
+        Our team will reach out to john@example.com shortly to get you
+        started with AutoStream.
 ```
 
 ---
@@ -92,14 +90,14 @@ Infix:  Perfect! I've captured your details for the Pro plan.
 
 | # | Capability | How it works |
 |---|---|---|
-| 🧠 | **Intent Classification** | Rule-based NLP classifies every turn as `greeting`, `product_or_pricing`, or `high_intent_lead` before routing |
-| 📚 | **RAG Knowledge Retrieval** | Pricing, features, and policies are read from `data/knowledge_base.json`; an LLM synthesises natural answers for open queries |
-| 🤖 | **LLM-Augmented Responses** | `gpt-4o-mini` generates fluid, context-aware replies for uncategorised questions using the knowledge base as its only source |
-| 🪤 | **Gated Lead Qualification** | Name → Email → Platform collected one at a time; the capture tool never fires until all three are confirmed |
-| 🔧 | **Tool Execution** | `mock_lead_capture(name, email, platform)` is invoked only at the correct graph node, never prematurely |
+| 🧠 | **LLM-Powered Intent Classification** | Every user message is classified by the LLM into `greeting`, `product_or_pricing`, or `high_intent_lead` using structured JSON output — handles natural language variations that regex would miss |
+| 📚 | **RAG-Powered Knowledge Retrieval** | The full knowledge base (`data/knowledge_base.json`) is injected as context into every LLM response call, ensuring answers are grounded in real product data |
+| 🤖 | **LLM as Primary Brain** | `gpt-4o-mini` generates all product/pricing/objection responses — no hardcoded response templates for the demo flow |
+| 🪤 | **Gated Lead Qualification** | Name → Email → Platform collected one field at a time; the capture tool never fires until all three are confirmed |
+| 🔧 | **Tool Execution** | `mock_lead_capture(name, email, platform)` is invoked only at the `execute_tool` graph node, never prematurely |
 | 🔁 | **Full Conversation Memory** | `AgentState` carries all message history and lead fields across every turn with no external store required |
-| 💬 | **Objection Handling** | Pricing pushback and doubt signals are matched against a configurable `objection_library.json` |
-| 🧩 | **Graceful LLM Fallback** | If no API key is set, the agent runs entirely on rule-based logic — no crashes, no degraded UX |
+| 💬 | **Objection Handling** | Price objections and feature questions are naturally handled by the LLM using the objection library as additional context |
+| 🧩 | **Graceful Regex Fallback** | If no API key is set, intent classification and responses fall back to rule-based logic — no crashes, no degraded UX |
 
 ---
 
@@ -124,7 +122,7 @@ The agent's logic is a directed graph with named nodes. Every routing decision �
 
 ```
                         ┌─────────────────┐
-         User Input ──► │ classify_intent │
+         User Input ──► │ classify_intent │  (LLM classifies intent)
                         └────────┬────────┘
                                  │
               ┌──────────────────┼───────────────────┐
@@ -134,7 +132,7 @@ The agent's logic is a directed graph with named nodes. Every routing decision �
     │ respond_greeting │ │ retrieve_knowledge│ │ qualify_lead │
     └────────┬─────────┘ └─────────┬─────────┘ └──────┬───────┘
              │                     │                   │
-             │              (LLM or rule-based)   ┌────┴──────────────┐
+             │              (LLM + RAG context)   ┌────┴──────────────┐
              │                     │              │                   │
              ▼                     ▼              ▼                   ▼
             END                   END       execute_tool             END
@@ -145,34 +143,37 @@ The agent's logic is a directed graph with named nodes. Every routing decision �
 
 ---
 
-### Hybrid Intent & Response Strategy
+### LLM-First Architecture
 
 ```
 User message
      │
      ▼
-classify_intent  ──── regex + keyword rules ────► routing signal
+classify_intent
+     │
+     ├── LLM available?
+     │     └── YES → LLM classifies intent via structured JSON
+     │                {"intent": "greeting|product_or_pricing|high_intent_lead"}
+     │
+     └── NO  → regex fallback (keyword matching)
      │
      ▼
-retrieve_knowledge
+retrieve_knowledge  (for product_or_pricing intent)
      │
-     ├── known pattern? (objection / compare / refund / support)
-     │         └──► rule-based templated response  (fast, predictable)
+     ├── LLM available?
+     │     └── YES → LLM generates response with full knowledge base as RAG context
+     │               System prompt + knowledge JSON + conversation history
      │
-     └── open / uncategorised query?
-               └──► LLM call (gpt-4o-mini)
-                         ├── system: "answer using only knowledge context"
-                         ├── user:   message + JSON knowledge dump
-                         └──► natural language answer + CTA
+     └── NO  → static pricing snapshot fallback
 ```
 
-The LLM is only invoked where rule-based logic would produce a generic or unhelpful answer. Structured flows (greeting, qualification, tool execution) remain fully deterministic.
+**The LLM drives both decisions (intent) and responses (knowledge retrieval).** Regex and templates are only used as graceful fallbacks when no API key is configured.
 
 ---
 
 ### State Management
 
-Every turn passes through one shared `AgentState` dict:
+Every turn passes through one shared `AgentState` dict. All nodes return **partial dicts** that LangGraph merges — no node mutates and returns the full state, which prevents message duplication with the `Annotated[list, operator.add]` reducer.
 
 ```python
 class AgentState(TypedDict):
@@ -204,7 +205,7 @@ linix/
 │   └── conversation_examples.json # Reference examples for intent types
 │
 ├── validate_data.py               # Validates JSON schema and field completeness
-├── test_conversation.py           # Scripted end-to-end conversation harness
+├── test_conversation.py           # Scripted end-to-end test with assertions
 ├── install.sh                     # One-command dependency installer
 ├── requirements.txt               # Pinned dependency versions
 ├── .env.example                   # Environment variable template
@@ -251,11 +252,15 @@ cp .env.example .env
 Edit `.env` and add your key:
 
 ```env
-OPENAI_API_KEY=sk-...
-LLM_MODEL=gpt-4o-mini        # or gpt-4o, gpt-3.5-turbo
+ENABLE_LLM=true
+GOOGLE_API_KEY=AIza...
+LLM_MODEL=gemini-1.5-flash
+LLM_TIMEOUT_SECONDS=10
+LLM_MAX_RETRIES=1
 ```
 
-> **No API key?** Leave `OPENAI_API_KEY` blank. The agent will run fully on rule-based logic — all pricing, objection handling, and lead qualification still work. Only open-ended queries fall back to a static pricing snapshot instead of an LLM-generated answer.
+> **LLM is opt-in for reliability.** Keep `ENABLE_LLM=false` to force deterministic rule-based behavior.
+> Set `ENABLE_LLM=true` (with a valid `GOOGLE_API_KEY`) to enable Gemini-powered intent and response generation.
 
 ---
 
@@ -358,17 +363,19 @@ In the Meta App Dashboard, set the webhook URL and subscribe to the `messages` t
 
 | Criterion | Implementation | Status |
 |---|---|---|
-| Intent — greeting | `classify_intent` regex: `hi\|hello\|hey` | ✅ |
-| Intent — product / pricing | Keywords: `price`, `plan`, `refund`, `feature` | ✅ |
-| Intent — high-intent lead | Buy signals: `subscribe`, `buy`, `sign up`, `interested` | ✅ |
-| RAG from local knowledge base | JSON lookup + LLM synthesis in `retrieve_knowledge` | ✅ |
+| Intent — greeting | LLM classifies via structured JSON `{"intent": "greeting"}`, regex fallback | ✅ |
+| Intent — product / pricing | LLM classifies via structured JSON, regex fallback for `price`, `plan`, `refund`, etc. | ✅ |
+| Intent — high-intent lead | LLM classifies buy signals naturally; regex fallback: `subscribe`, `buy`, `sign up`, etc. | ✅ |
+| RAG from local knowledge base | Full `knowledge_base.json` injected as LLM context for every response | ✅ |
 | Lead gated before tool call | `qualify_lead` collects all 3 fields before routing to `execute_tool` | ✅ |
 | `mock_lead_capture()` tool | Fires inside `execute_tool` node only | ✅ |
 | State retained across 5–6 turns | `AgentState` TypedDict persists across all graph node invocations | ✅ |
-| Objection handling | Keyword-matched from `objection_library.json` | ✅ |
-| LLM integration | `gpt-4o-mini` via `langchain-openai` in `retrieve_knowledge` | ✅ |
-| LLM name extraction | `extract_name_with_llm()` called inside `qualify_lead` | ✅ |
-| Graceful fallback (no API key) | Rule-based path used when `OPENAI_API_KEY` is absent | ✅ |
+| Objection handling | Objection library injected as LLM context; LLM generates empathetic responses | ✅ |
+| LLM as primary brain | LLM drives both intent classification AND response generation | ✅ |
+| LLM name extraction | `extract_name_with_llm()` called inside `qualify_lead` only (no duplicate calls) | ✅ |
+| Consistent state management | All nodes return partial dicts; no mutation + full-state return conflicts | ✅ |
+| Test with assertions | `test_conversation.py` runs 5 turns and asserts all lead fields + `lead_captured` | ✅ |
+| Graceful fallback (LLM disabled/unavailable) | Regex intent + static pricing snapshot when `ENABLE_LLM=false` or `GOOGLE_API_KEY` is absent | ✅ |
 | Pinned dependencies | All versions locked in `requirements.txt` | ✅ |
 | WhatsApp deployment plan | Documented above with working code sketch | ✅ |
 
