@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+"""THIS MODULE IS FOR VALIDATING THE STRUCTURE AND CONTENT OF THE DATA FILES IN THE 'data' DIRECTORY."""
+
 def validate_json_file(filepath):
     try:
         with open(filepath, 'r') as f:
