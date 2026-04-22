@@ -6,6 +6,7 @@ import json
 import os
 import operator
 import re
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -15,11 +16,117 @@ PRODUCT_NAME = "AutoStream"
 load_dotenv(override=True)
 
 _LLM: Optional[ChatGoogleGenerativeAI] = None
+_LLM_MODEL_NAME: Optional[str] = None
+
+
+def _is_retryable_llm_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    markers = [
+        "503",
+        "unavailable",
+        "429",
+        "resource_exhausted",
+        "quota",
+        "404",
+        "not_found",
+        "not found",
+        "504",
+        "deadline_exceeded",
+        "deadline exceeded",
+        "timed out",
+        "timeout",
+    ]
+    return any(marker in text for marker in markers)
+
+
+def _configured_model_candidates() -> list[str]:
+    preferred = os.getenv("LLM_MODEL", "gemini-flash-latest").strip()
+    raw = os.getenv(
+        "LLM_FALLBACK_MODELS",
+        "gemini-flash-latest,gemini-2.0-flash,gemini-2.5-flash",
+    )
+    extra = [m.strip() for m in raw.split(",") if m.strip()]
+
+    # Keep order stable and unique while ensuring preferred is first.
+    seen = set()
+    ordered = [preferred] + extra
+    result = []
+    for model in ordered:
+        if model not in seen:
+            seen.add(model)
+            result.append(model)
+    return result
+
+
+def _build_llm(model_name: str) -> ChatGoogleGenerativeAI:
+    timeout_seconds = int(os.getenv("LLM_TIMEOUT_SECONDS", "25"))
+    max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
+    return ChatGoogleGenerativeAI(
+        model=model_name,
+        temperature=0.2,
+        timeout=timeout_seconds,
+        max_retries=max_retries,
+    )
 
 
 def _invoke_llm_safely(llm: ChatGoogleGenerativeAI, messages: list):
-    """Invoke LLM and bubble errors so the agent never silently falls back."""
-    return llm.invoke(messages)
+    """Invoke LLM in strict mode; retry with configured Gemini alternatives on provider errors."""
+    global _LLM, _LLM_MODEL_NAME
+    attempts_per_model = int(os.getenv("LLM_ATTEMPTS_PER_MODEL", "2"))
+    backoff_seconds = float(os.getenv("LLM_RETRY_BACKOFF_SECONDS", "0.75"))
+
+    ordered_models = []
+    if _LLM_MODEL_NAME:
+        ordered_models.append(_LLM_MODEL_NAME)
+    for model_name in _configured_model_candidates():
+        if model_name not in ordered_models:
+            ordered_models.append(model_name)
+
+    last_exc: Optional[Exception] = None
+    for model_name in ordered_models:
+        model_client = llm if model_name == _LLM_MODEL_NAME else _build_llm(model_name)
+
+        for attempt_idx in range(attempts_per_model):
+            try:
+                reply = model_client.invoke(messages)
+                _LLM = model_client
+                _LLM_MODEL_NAME = model_name
+                return reply
+            except Exception as exc:
+                last_exc = exc
+                if not _is_retryable_llm_error(exc):
+                    raise
+                if attempt_idx < attempts_per_model - 1:
+                    sleep_for = backoff_seconds * (2 ** attempt_idx)
+                    time.sleep(sleep_for)
+
+    if last_exc is not None:
+        raise RuntimeError(
+            "All configured LLM models failed after retries. "
+            "Check provider status/quota and try again."
+        ) from last_exc
+
+    raise RuntimeError("LLM invocation failed before any model call was attempted.")
+
+
+def _content_to_text(content) -> str:
+    """Normalize LangChain/Gemini message content blocks to plain text."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        if "text" in content and isinstance(content["text"], str):
+            return content["text"]
+        return json.dumps(content)
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            text = _content_to_text(item)
+            if text:
+                parts.append(text)
+        return "\n".join(parts)
+    return str(content)
 
 
 class AgentState(TypedDict):
@@ -94,7 +201,7 @@ OBJECTION_LIBRARY = load_json_file(DATA_DIR / "objection_library.json", DEFAULT_
 # ---------------------------------------------------------------------------
 
 def get_llm() -> ChatGoogleGenerativeAI:
-    global _LLM
+    global _LLM, _LLM_MODEL_NAME
     if _LLM is not None:
         return _LLM
     llm_enabled = os.getenv("ENABLE_LLM", "false").strip().lower() in {
@@ -108,14 +215,8 @@ def get_llm() -> ChatGoogleGenerativeAI:
     if not os.getenv("GOOGLE_API_KEY"):
         raise RuntimeError("LLM is mandatory. GOOGLE_API_KEY is missing in .env.")
 
-    timeout_seconds = int(os.getenv("LLM_TIMEOUT_SECONDS", "15"))
-    max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
-    _LLM = ChatGoogleGenerativeAI(
-        model=os.getenv("LLM_MODEL", "gemini-flash-latest"),
-        temperature=0.2,
-        timeout=timeout_seconds,
-        max_retries=max_retries,
-    )
+    _LLM_MODEL_NAME = os.getenv("LLM_MODEL", "gemini-flash-latest").strip()
+    _LLM = _build_llm(_LLM_MODEL_NAME)
     return _LLM
 
 
@@ -123,9 +224,11 @@ def get_llm() -> ChatGoogleGenerativeAI:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def parse_json_object(text: str) -> Optional[dict]:
+def parse_json_object(text) -> Optional[dict]:
     """Extract the first JSON object from *text*."""
-    text = text.strip()
+    text = _content_to_text(text).strip()
+    if not text:
+        return None
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -485,7 +588,9 @@ def retrieve_knowledge(state: AgentState) -> dict:
             *state["messages"][-10:],
         ]
     )
-    response = llm_reply.content.strip()
+    response = _content_to_text(llm_reply.content).strip()
+    if not response:
+        raise ValueError("LLM returned empty response content.")
 
     updates = {
         "messages": [AIMessage(content=response)],
@@ -708,7 +813,11 @@ def run_agent():
             result = graph.invoke(state)
         except Exception as exc:
             print(f"Agent error: {exc}")
-            print("No fallback is enabled. Fix LLM_MODEL / GOOGLE_API_KEY and retry.")
+            message = str(exc).lower()
+            if "deadline" in message or "timeout" in message or "unavailable" in message:
+                print("No fallback is enabled. Provider timeout/capacity issue detected; please retry.")
+            else:
+                print("No fallback is enabled. Fix LLM_MODEL / GOOGLE_API_KEY and retry.")
             continue
         state = result
 
