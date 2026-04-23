@@ -1,4 +1,13 @@
-# 🤖 Infix — Social-to-Lead Agentic Workflow
+# Infix — Social-to-Lead Agentic Workflow
+
+<div align="center">
+██╗███╗   ██╗███████╗██╗██╗  ██╗
+██║████╗  ██║██╔════╝██║╚██╗██╔╝
+██║██╔██╗ ██║█████╗  ██║ ╚███╔╝ 
+██║██║╚██╗██║██╔══╝  ██║ ██╔██╗ 
+██║██║ ╚████║██║     ██║██╔╝ ██╗
+╚═╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝
+<br/>
 
 > An AI-powered conversational sales agent that turns social media conversations into qualified business leads — built for **ServiceHive** as part of the **Inflx** platform.
 
@@ -174,17 +183,17 @@ Agent: Perfect! I've captured your details for the Pro plan. Our team will
            │                    │                    │
            ▼                    ▼                    ▼
   ┌─────────────────┐  ┌─────────────────┐  ┌───────────────────┐
-  │respond_greeting │  │retrieve_knowledge│  │   qualify_lead    │
+  │respond_greeting │  │retrieveknowledge│  │   qualify_lead    │
   │                 │  │   (RAG + LLM)   │  │ name→email→platf. │
   └────────┬────────┘  └────────┬────────┘  └────────┬──────────┘
-           │                    │                     │
-           │                    │        all fields   │  field
-           │                    │        collected    │  missing
-           ▼                    ▼             ▼       ▼
-          END                  END    ┌──────────────────┐
-                                      │   execute_tool   │
+           │                    │                    │
+           │                    │        all fields  │  field
+           │                    │        collected   │  missing
+           ▼                    ▼             ▼      ▼
+          END                  END    ┌───────────────────┐
+                                      │   execute_tool    │
                                       │mock_lead_capture()│
-                                      └────────┬─────────┘
+                                      └────────┬──────────└
                                                │
                                               END
 ```
