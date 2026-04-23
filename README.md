@@ -215,15 +215,15 @@ User Input
       ▼
 classify_intent
       │
- ┌────┼──────────────┐
- ▼    ▼              ▼
+ ┌────────────┼──────────────┐
+ ▼            ▼              ▼
 Greeting   Knowledge   Qualification
-                       │
-                       ▼
-                   Execute Tool
-                       │
-                       ▼
-                      END
+                             │
+                             ▼
+                        Execute Tool
+                             │
+                             ▼
+                            END
 ```
 
 ---
@@ -336,6 +336,8 @@ Built for:
 GitHub:
 
 https://github.com/anishsmit23/linix
+
+
 LinkedIn:
 
 https://www.linkedin.com/in/anish55
