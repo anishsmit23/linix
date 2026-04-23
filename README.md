@@ -7,12 +7,13 @@
 ██║██║╚██╗██║██╔══╝  ██║ ██╔██╗ 
 ██║██║ ╚████║██║     ██║██╔╝ ██╗
 ╚═╝╚═╝  ╚═══╝╚═╝     ╚═╝╚═╝  ╚═╝
-<br/>
 
 > An AI-powered conversational sales agent that turns social media conversations into qualified business leads — built for **ServiceHive** as part of the **Inflx** platform.
+<br/>
+---
+</div>
 
 ---
-
 ## 📌 What is Infix?
 
 **Infix** is a LangGraph-powered agentic AI built for **AutoStream**, a SaaS product offering automated video editing tools for content creators. It's not a simple chatbot — it's a stateful, multi-node reasoning agent that understands where a user is in the sales funnel and responds accordingly.
