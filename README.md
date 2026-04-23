@@ -232,12 +232,10 @@ Greeting   Knowledge   Qualification
 
 Traditional LLM chains:
 
-❌ No routing
-❌ No persistence
-❌ No tool gating
+there is No routing in normal LLMs, persistence and there is no scope for tool gating
 
 LangGraph enables:
-
+        Gives us features like:
 ✔ Conditional execution
 ✔ Stateful reasoning
 ✔ Multi-stage workflows
