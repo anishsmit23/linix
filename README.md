@@ -1,4 +1,4 @@
-# Infix — Social-to-Lead Agentic Workflow
+
 
 <div align="center">
 ██╗███╗   ██╗███████╗██╗██╗  ██╗
