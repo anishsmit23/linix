@@ -1,5 +1,5 @@
 
-readme_content = """<div align="center">
+<div align="center">
 
 # 🤖 Infix — AI Conversational Sales Agent
 
